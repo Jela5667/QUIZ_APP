@@ -1,0 +1,449 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuizMaster - CSC336</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- PDF Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <style>
+        body {
+            background: #eaf0ff;
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            color: #202b46;
+        }
+
+        .quiz-box {
+            max-width: 700px;
+            margin: 20px auto;
+            padding: 25px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px #cccccc;
+        }
+
+        .option {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            background: white;
+            border: 2px solid #dddddd;
+            border-radius: 8px;
+            text-align: left;
+            color: #202b46;
+        }
+
+        .option.correct {
+            background: #c8f7d2;
+            border-color: green;
+        }
+
+        .option.wrong {
+            background: #ffd0d0;
+            border-color: red;
+        }
+
+        .dark {
+            background: #172033;
+            color: white;
+        }
+
+        .dark .quiz-box {
+            background: #26344b;
+        }
+
+        .dark .option {
+            background: #26344b;
+            color: white;
+            border-color: #65738a;
+        }
+
+        .dark .option.correct {
+            background: #c8f7d2;
+            color: black;
+        }
+
+        .dark .option.wrong {
+            background: #ffd0d0;
+            color: black;
+        }
+
+        .progress-bar-custom {
+            display: flex;
+            gap: 5px;
+            margin: 20px 0;
+        }
+
+        .part {
+            flex: 1;
+            height: 10px;
+            background: #ddd;
+            border-radius: 5px;
+        }
+
+        .green { background: #16a34a; }
+        .red { background: #dc3545; }
+        .blue { background: #6478f5; }
+
+        #message {
+            font-weight: bold;
+        }
+
+        @media (max-width: 600px) {
+            body { padding: 8px; }
+            .quiz-box { padding: 16px; }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="quiz-box">
+
+    <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+        <h2>QuizMaster</h2>
+        <button class="btn btn-dark" onclick="changeMode()">
+            Dark / Light
+        </button>
+    </div>
+
+    <p>CSC336 Web Technologies</p>
+    <hr>
+
+    <div id="quiz">
+
+        <div class="d-flex justify-content-between">
+            <b id="number"></b>
+            <b id="timer">Time: 60 seconds</b>
+        </div>
+
+        <div id="progress" class="progress-bar-custom"></div>
+
+        <h4 id="question" class="mt-4"></h4>
+
+        <div id="options"></div>
+
+        <p id="message" class="mt-3" aria-live="polite"></p>
+
+        <button id="next" class="btn btn-primary"
+                onclick="nextQuestion()" disabled>
+            Next Question
+        </button>
+
+    </div>
+
+    <div id="result" style="display:none">
+        <h2>Quiz Completed!</h2>
+        <h3 id="score"></h3>
+        <p id="details"></p>
+
+        <button class="btn btn-success mb-2"
+                onclick="downloadPDF()">
+            Download Result PDF
+        </button>
+
+        <button class="btn btn-primary mb-2"
+                onclick="startQuiz()">
+            Restart Quiz
+        </button>
+    </div>
+
+</div>
+
+<script>
+const allQuestions = [
+    {
+        q: "What is the full form of HTML?",
+        options: [
+            "Hyper Text Markup Language",
+            "High Text Machine Language",
+            "Home Tool Markup Language",
+            "Hyper Transfer Language"
+        ],
+        answer: 0
+    },
+    {
+        q: "Which language styles a website?",
+        options: ["HTML", "CSS", "Java", "C++"],
+        answer: 1
+    },
+    {
+        q: "Which language makes a website interactive?",
+        options: ["CSS", "HTML", "JavaScript", "SQL"],
+        answer: 2
+    },
+    {
+        q: "Which HTML tag creates a hyperlink?",
+        options: ["<p>", "<h1>", "<a>", "<img>"],
+        answer: 2
+    },
+    {
+        q: "Bootstrap is a:",
+        options: [
+            "Database",
+            "CSS Framework",
+            "Operating System",
+            "Text Editor"
+        ],
+        answer: 1
+    },
+    {
+        q: "Which CSS property changes text color?",
+        options: ["margin", "padding", "color", "width"],
+        answer: 2
+    },
+    {
+        q: "Which symbol selects an ID in CSS?",
+        options: [".", "#", "*", "&"],
+        answer: 1
+    },
+    {
+        q: "Which command prints a message in the console?",
+        options: [
+            "console.log()",
+            "print.css()",
+            "write.html()",
+            "show.page()"
+        ],
+        answer: 0
+    }
+];
+
+let questions = [];
+let current = 0;
+let score = 0;
+let time = 60;
+let timer;
+let answers = [];
+let finished = false;
+
+function startQuiz() {
+    clearInterval(timer);
+
+    questions = [...allQuestions]
+        .sort(() => Math.random() - 0.5)
+        .slice(0, 5);
+
+    current = 0;
+    score = 0;
+    time = 60;
+    answers = Array(5).fill(null);
+    finished = false;
+
+    document.getElementById("quiz").style.display = "block";
+    document.getElementById("result").style.display = "none";
+
+    showQuestion();
+
+    timer = setInterval(function() {
+        time--;
+
+        document.getElementById("timer").innerText =
+            "Time: " + time + " seconds";
+
+        if (time <= 0) {
+            endQuiz();
+        }
+    }, 1000);
+}
+
+function showQuestion() {
+    let q = questions[current];
+
+    document.getElementById("number").innerText =
+        "Question " + (current + 1) + " of " + questions.length;
+
+    document.getElementById("question").innerText = q.q;
+    document.getElementById("options").innerHTML = "";
+    document.getElementById("message").innerText = "";
+    document.getElementById("next").disabled = true;
+
+    document.getElementById("progress").innerHTML = "";
+
+    questions.forEach(function(question, i) {
+        let part = document.createElement("div");
+        part.className = "part";
+
+        if (answers[i] !== null) {
+            part.classList.add(
+                answers[i] === questions[i].answer ? "green" : "red"
+            );
+        } else if (i === current) {
+            part.classList.add("blue");
+        }
+
+        document.getElementById("progress").appendChild(part);
+    });
+
+    q.options.forEach(function(option, index) {
+        let button = document.createElement("button");
+
+        button.className = "option";
+        button.innerText =
+            String.fromCharCode(65 + index) + ". " + option;
+
+        button.onclick = function() {
+            checkAnswer(index);
+        };
+
+        document.getElementById("options").appendChild(button);
+    });
+}
+
+function checkAnswer(selected) {
+    if (finished || answers[current] !== null) return;
+
+    let correct = questions[current].answer;
+    answers[current] = selected;
+
+    let buttons = document.querySelectorAll(".option");
+
+    buttons.forEach(function(button, index) {
+        button.disabled = true;
+
+        if (index === correct) {
+            button.classList.add("correct");
+        }
+
+        if (index === selected && selected !== correct) {
+            button.classList.add("wrong");
+        }
+    });
+
+    if (selected === correct) {
+        score++;
+        document.getElementById("message").innerText =
+            "Correct Answer!";
+        document.getElementById("message").style.color = "green";
+    } else {
+        document.getElementById("message").innerText =
+            "Wrong Answer! Correct answer: " +
+            questions[current].options[correct];
+        document.getElementById("message").style.color = "red";
+    }
+
+    document.getElementById("next").disabled = false;
+    showProgress();
+}
+
+function showProgress() {
+    let parts = document.querySelectorAll(".part");
+
+    parts.forEach(function(part, i) {
+        if (answers[i] !== null) {
+            part.className = "part " +
+                (answers[i] === questions[i].answer ? "green" : "red");
+        }
+    });
+}
+
+function nextQuestion() {
+    if (finished || answers[current] === null) return;
+
+    current++;
+
+    if (current >= questions.length) {
+        endQuiz();
+    } else {
+        showQuestion();
+    }
+}
+
+function endQuiz() {
+    if (finished) return;
+
+    finished = true;
+    clearInterval(timer);
+
+    document.getElementById("quiz").style.display = "none";
+    document.getElementById("result").style.display = "block";
+
+    document.getElementById("score").innerText =
+        "Your Score: " + score + " / " + questions.length;
+
+    let wrong = answers.filter((a, i) =>
+        a !== null && a !== questions[i].answer
+    ).length;
+
+    let skipped = answers.filter(a => a === null).length;
+
+    document.getElementById("details").innerText =
+        "Correct: " + score +
+        " | Wrong: " + wrong +
+        " | Unanswered: " + skipped +
+        " | Time left: " + time + " seconds";
+}
+
+function changeMode() {
+    document.body.classList.toggle("dark");
+}
+
+function downloadPDF() {
+    if (!window.jspdf) {
+        alert("PDF library load nahi hui. Internet check karo.");
+        return;
+    }
+
+    const { jsPDF } = window.jspdf;
+    let pdf = new jsPDF();
+
+    pdf.setFontSize(18);
+    pdf.text("QuizMaster - Quiz Result", 20, 20);
+
+    pdf.setFontSize(12);
+    pdf.text("Course: CSC336 Web Technologies", 20, 35);
+    pdf.text("Score: " + score + " / " + questions.length, 20, 45);
+    pdf.text("Time remaining: " + time + " seconds", 20, 55);
+
+    let y = 70;
+
+    questions.forEach(function(q, i) {
+        if (y > 260) {
+            pdf.addPage();
+            y = 20;
+        }
+
+        let selected = answers[i];
+
+        let userAnswer = selected === null
+            ? "Unanswered"
+            : q.options[selected];
+
+        let lines = pdf.splitTextToSize(
+            (i + 1) + ". " + q.q, 170
+        );
+
+        pdf.text(lines, 20, y);
+        y += lines.length * 6;
+
+        lines = pdf.splitTextToSize(
+            "Your answer: " + userAnswer, 165
+        );
+
+        pdf.text(lines, 25, y);
+        y += lines.length * 6;
+
+        lines = pdf.splitTextToSize(
+            "Correct answer: " + q.options[q.answer], 165
+        );
+
+        pdf.text(lines, 25, y);
+        y += lines.length * 6 + 5;
+    });
+
+    pdf.save("Quiz_Result.pdf");
+}
+
+startQuiz();
+</script>
+
+</body>
+</html>
